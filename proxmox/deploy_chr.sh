@@ -191,9 +191,9 @@ update_runtime_variables() {
   SSH_TARGET="${CONFIG_PROXMOX_USER}@${CONFIG_PROXMOX_HOST}"
   CHR_ARCHIVE="chr-${CONFIG_IMAGE_VERSION}.img.zip"
   CHR_IMAGE="chr-${CONFIG_IMAGE_VERSION}.img"
-  CHR_QCOW2="chr-${CONFIG_IMAGE_VERSION}.qcow2"
-  REMOTE_RAW_PATH="${CONFIG_IMAGE_REMOTEDIR}/${CHR_IMAGE}"
-  REMOTE_IMAGE_PATH="${CONFIG_IMAGE_REMOTEDIR}/${CHR_QCOW2}"
+  CHR_RAW_CONVERTED="chr-${CONFIG_IMAGE_VERSION}.raw"
+  REMOTE_RAW_SOURCE_PATH="${CONFIG_IMAGE_REMOTEDIR}/${CHR_IMAGE}"
+  REMOTE_IMAGE_PATH="${CONFIG_IMAGE_REMOTEDIR}/${CHR_RAW_CONVERTED}"
 }
 
 ensure_ssh_connection() {
@@ -337,13 +337,13 @@ deploy_vm() {
   run_remote "mkdir -p '${CONFIG_IMAGE_REMOTEDIR}'"
 
   log "Uploading image to Proxmox host..."
-  copy_to_remote "${LOCAL_RAW_IMAGE}" "${REMOTE_RAW_PATH}"
+  copy_to_remote "${LOCAL_RAW_IMAGE}" "${REMOTE_RAW_SOURCE_PATH}"
 
-  log "Converting raw image to qcow2 on Proxmox host..."
+  log "Converting raw image on Proxmox host (raw output)..."
   run_remote "rm -f '${REMOTE_IMAGE_PATH}'"
-  run_remote "qemu-img convert -f raw -O qcow2 '${REMOTE_RAW_PATH}' '${REMOTE_IMAGE_PATH}'"
+  run_remote "qemu-img convert -f raw -O raw '${REMOTE_RAW_SOURCE_PATH}' '${REMOTE_IMAGE_PATH}'"
   run_remote "chmod 644 '${REMOTE_IMAGE_PATH}'"
-  run_remote "rm -f '${REMOTE_RAW_PATH}'" || true
+  run_remote "rm -f '${REMOTE_RAW_SOURCE_PATH}'" || true
 
   if [[ -n ${existing_vmid} ]]; then
     log "VM ${existing_vmid} already exists; updating disk and configuration."
@@ -354,18 +354,18 @@ deploy_vm() {
   fi
 
   log "Importing CHR disk into storage ${CONFIG_PROXMOX_STORAGE}..."
-  run_remote "qm importdisk ${vmid} ${REMOTE_IMAGE_PATH} ${CONFIG_PROXMOX_STORAGE} --format qcow2"
+  run_remote "qm importdisk ${vmid} ${REMOTE_IMAGE_PATH} ${CONFIG_PROXMOX_STORAGE} --format raw"
 
   log "Attaching imported disk and configuring boot order..."
   local disk_ref
-  disk_ref=$(run_remote --silent "bash -lc 'qm config ${vmid} | awk -F": " '\''/^unused[0-9]+:/ {print $2}'\'' | tail -n1'") || disk_ref=""
+  disk_ref=$(run_remote --silent "qm config ${vmid} | awk -F': ' '/^unused[0-9]+:/ {print \$2}' | tail -n1") || disk_ref=""
   disk_ref=$(printf '%s' "${disk_ref}" | tr -d '\r')
 
   if [[ -z ${disk_ref} ]]; then
     disk_ref="${CONFIG_PROXMOX_STORAGE}:vm-${vmid}-disk-0"
   fi
 
-  run_remote "qm set ${vmid} --delete scsi0" || true
+  #run_remote "qm set ${vmid} --delete scsi0" || true
   run_remote "qm set ${vmid} --scsihw virtio-scsi-pci --scsi0 ${disk_ref} --boot order=scsi0 --vga std --ide2 none,media=cdrom --agent enabled=1,fstrim_cloned_disks=1"
 
   log "Removing uploaded image to free space..."
