@@ -1,0 +1,77 @@
+attila@attila-ubuntu-24-desktop:~/opengwtools/proxmox$ ./deploy_chr.sh 
+
+=== MikroTik CHR Proxmox Utility ===
+Target host : root@172.22.22.252
+VM name     : chr-terraform-lab (ID: auto)
+Image ver.  : 7.20.1
+Storage     : local-lvm on pve-01
+
+1) Deploy / Update CHR VM
+2) Destroy CHR VM
+3) Edit configuration
+4) Exit
+
+Creative spark, AI prompting, and continuous debugging by: Attila Macskasy
+Code generated using: GPT-5 Codex (Preview) — Premium Model x1
+
+Select an option [1-4]: 1
+[deploy-chr] Connecting to root@172.22.22.252 (password prompt may appear)...
+root@172.22.22.252's password: 
+[deploy-chr] Preparing deployment for VM 115 (chr-terraform-lab)
+[deploy-chr] Downloading MikroTik CHR 7.20.1 raw image archive...
+[deploy-chr] Extracting raw disk image...
+[deploy-chr] Ensuring remote image directory /var/lib/vz/template/iso exists...
+[deploy-chr] remote: mkdir -p '/var/lib/vz/template/iso'
+[deploy-chr] Uploading image to Proxmox host... chr-7.20.1.img  100%  128MB  55.6MB/s   00:02    
+[deploy-chr] Converting raw image to qcow2 on Proxmox host...
+[deploy-chr] remote: rm -f '/var/lib/vz/template/iso/chr-7.20.1.qcow2'
+[deploy-chr] remote: qemu-img convert -f raw -O qcow2 '/var/lib/vz/template/iso/chr-7.20.1.img' '/var/lib/vz/template/iso/chr-7.20.1.qcow2'
+[deploy-chr] remote: chmod 644 '/var/lib/vz/template/iso/chr-7.20.1.qcow2'
+[deploy-chr] remote: rm -f '/var/lib/vz/template/iso/chr-7.20.1.img'
+[deploy-chr] Creating VM 115 (chr-terraform-lab)...
+[deploy-chr] remote: qm create 115 --name chr-terraform-lab --memory 512 --cores 1 --sockets 1 --net0 virtio,bridge=vmbr0 --ostype l26 --onboot 1 --scsihw virtio-scsi-pci --boot c
+[deploy-chr] Importing CHR disk into storage local-lvm...
+[deploy-chr] remote: qm importdisk 115 /var/lib/vz/template/iso/chr-7.20.1.qcow2 local-lvm --format qcow2
+importing disk '/var/lib/vz/template/iso/chr-7.20.1.qcow2' to VM 115 ...
+format 'qcow2' is not supported by the target storage - using 'raw' instead
+  Logical volume "vm-115-disk-0" created.
+  Logical volume pve/vm-115-disk-0 changed.
+transferred 0.0 B of 128.0 MiB (0.00%)
+transferred 6.2 MiB of 128.0 MiB (4.82%)
+transferred 12.1 MiB of 128.0 MiB (9.49%)
+transferred 18.1 MiB of 128.0 MiB (14.16%)
+transferred 24.1 MiB of 128.0 MiB (18.83%)
+transferred 30.1 MiB of 128.0 MiB (23.50%)
+transferred 36.1 MiB of 128.0 MiB (28.18%)
+transferred 42.0 MiB of 128.0 MiB (32.85%)
+transferred 48.0 MiB of 128.0 MiB (37.52%)
+transferred 54.0 MiB of 128.0 MiB (42.19%)
+transferred 60.0 MiB of 128.0 MiB (46.86%)
+transferred 66.0 MiB of 128.0 MiB (51.53%)
+transferred 68.6 MiB of 128.0 MiB (53.58%)
+transferred 70.1 MiB of 128.0 MiB (54.74%)
+transferred 76.2 MiB of 128.0 MiB (59.56%)
+transferred 82.2 MiB of 128.0 MiB (64.23%)
+transferred 88.2 MiB of 128.0 MiB (68.91%)
+transferred 94.2 MiB of 128.0 MiB (73.58%)
+transferred 100.2 MiB of 128.0 MiB (78.25%)
+transferred 103.5 MiB of 128.0 MiB (80.88%)
+transferred 109.5 MiB of 128.0 MiB (85.55%)
+transferred 115.5 MiB of 128.0 MiB (90.22%)
+transferred 121.5 MiB of 128.0 MiB (94.89%)
+transferred 127.4 MiB of 128.0 MiB (99.56%)
+transferred 128.0 MiB of 128.0 MiB (100.00%)
+transferred 128.0 MiB of 128.0 MiB (100.00%)
+unused0: successfully imported disk 'local-lvm:vm-115-disk-0'
+[deploy-chr] Attaching imported disk and configuring boot order...
+./deploy_chr.sh: line 361: $2: unbound variable
+[deploy-chr] remote: qm set 115 --delete scsi0
+cannot delete 'scsi0' - not set in current configuration!
+update VM 115: -delete scsi0
+[deploy-chr] remote: qm set 115 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-115-disk-0 --boot order=scsi0 --vga std --ide2 none,media=cdrom --agent enabled=1,fstrim_cloned_disks=1
+update VM 115: -agent enabled=1,fstrim_cloned_disks=1 -boot order=scsi0 -ide2 none,media=cdrom -scsi0 local-lvm:vm-115-disk-0 -scsihw virtio-scsi-pci -vga std
+[deploy-chr] Removing uploaded image to free space...
+[deploy-chr] remote: rm -f '/var/lib/vz/template/iso/chr-7.20.1.qcow2'
+[deploy-chr] Starting CHR VM...
+[deploy-chr] remote: qm start 115
+[deploy-chr] Deployment complete. Access the VM console via Proxmox GUI or 'qm terminal 115'.

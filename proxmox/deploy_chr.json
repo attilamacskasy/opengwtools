@@ -1,0 +1,19 @@
+{
+  "proxmox": {
+    "host": "172.22.22.252",
+    "user": "root",
+    "node": "pve-01",
+    "bridge": "vmbr0",
+    "storage": "local-lvm"
+  },
+  "vm": {
+    "id": "auto",
+    "name": "chr-terraform-lab",
+    "memory": 512,
+    "cores": 1
+  },
+  "image": {
+    "version": "7.20.1",
+    "remoteDir": "/var/lib/vz/template/iso"
+  }
+}
