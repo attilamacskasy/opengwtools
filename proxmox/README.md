@@ -67,6 +67,39 @@ The menu offers four options:
 
 While the script is running it will show the remote commands being executed, helping with troubleshooting. An SSH control socket persists for the life of the script so the password prompt only appears once per run.
 
+### Post-deployment checklist
+
+Once the VM finishes booting:
+
+> [!INFO]
+> Use the TAB key to auto-complete RouterOS commands and parameters while working through the console prompts.
+
+1. Open the VM console in the Proxmox web UI and wait for the login prompt.  
+  ![Proxmox console login screen](README.md.login.jpg)
+2. Sign in with the default `admin` user (leave the password empty) and accept the RouterOS license.  
+  ![RouterOS license agreement prompt](README.md.license.jpg)
+3. Set a strong password for the admin account when prompted. You can change password anytime later using hte command below:  
+  ```
+  /user set admin password=<new-strong-password>
+  ```  
+  ![Change password prompt](README.md.changepassword.jpg)
+4. Confirm the router received an IP address (DHCP by default) so you can reach it remotely.  
+  ```
+  /ip address print
+  ```  
+  ![IP address print output](README.md.ipaddressprint.jpg)
+5. Enable the SSH service to allow Terraform and automation to connect.  
+  ```
+  /ip service set ssh disabled=no
+  ```  
+  ![Command enabling SSH service](README.md.ipservicesetssh.jpg)
+6. Verify SSH is listening.  
+  ```
+  /ip service print
+  ```  
+  ![SSH service listing](README.md.ipserviceprint.jpg)
+7. Continue with OpenGWTools Mikrotik Router OS Bootstrap to push default configuration via SSH.
+
 ## Logs
 
 Every run writes an execution log (e.g., `deploy_chr_mvp_v1.log` if you tee the output) capturing menu selections, remote commands, and Proxmox responses. These logs are handy for diagnosing issues with disk import or VM configuration.
