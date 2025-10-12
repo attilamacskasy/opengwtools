@@ -446,8 +446,8 @@ display_router_identity() {
   local exit_code=$?
   set -e
   if (( exit_code != 0 )); then
-    log "Unable to read router identity (exit ${exit_code}). Continuing."
-    return
+    log "Unable to read router identity (exit ${exit_code})."
+    return ${exit_code}
   fi
 
   local identity
@@ -457,32 +457,84 @@ display_router_identity() {
   else
     log "Router identity output:\n${output}"
   fi
+  return 0
 }
 
-main() {
-  detect_python
+print_configuration_summary() {
+  printf '  Connection:\n'
+  for key in sshUser sshPort dhcpIp staticIp; do
+    local value=${CONNECTION_VALUES[$key]:-}
+    [[ -z ${value} ]] && value="(not set)"
+    printf '    %-10s : %s\n' "${key}" "${value}"
+  done
+
+  printf '\n  Globals:\n'
+  for key in "${GLOBAL_KEYS[@]}"; do
+    local value=${GLOBAL_VALUES[$key]:-}
+    [[ -z ${value} ]] && value="(not set)"
+    printf '    %-10s : %s\n' "${key}" "${value}"
+  done
+}
+
+pause_for_user() {
+  read -r -p $'\nPress Enter to return to the menu... ' _ || true
+}
+
+ensure_connection_detail() {
+  local name="$1"
+  local label="$2"
+  local validator="${3:-}"
+  local current=${CONNECTION_VALUES[$name]:-}
+  local new_value
+
+  if [[ -n ${current} ]]; then
+    return 0
+  fi
+
+  new_value=$(prompt_for_value "${label}" "${current}" "${validator}")
+  CONNECTION_VALUES[$name]="${new_value}"
+  save_config
+}
+
+test_ssh_connection() {
   load_config
 
-  local dhcp_ip
-  local ssh_user
-  local ssh_port
-  local subnet
+  local ssh_user=${CONNECTION_VALUES[sshUser]:-admin}
+  local ssh_port=${CONNECTION_VALUES[sshPort]:-22}
+  local default_target=${CONNECTION_VALUES[staticIp]:-}
+  if [[ -z ${default_target} ]]; then
+    default_target=${CONNECTION_VALUES[dhcpIp]:-}
+  fi
 
-  ssh_user=${CONNECTION_VALUES[sshUser]:-admin}
-  ssh_port=${CONNECTION_VALUES[sshPort]:-22}
+  local target
+  target=$(prompt_for_value "Router IP to test" "${default_target}" validate_ipv4)
+  if [[ -z ${CONNECTION_VALUES[dhcpIp]:-} ]]; then
+    CONNECTION_VALUES[dhcpIp]="${target}"
+  fi
+  save_config
+
+  display_router_identity "${ssh_user}" "${ssh_port}" "${target}"
+}
+
+interactive_edit_configuration() {
+  load_config
 
   log "Collecting connection details."
+  local dhcp_ip
   dhcp_ip=$(prompt_for_value "Current DHCP IP of MikroTik" "${CONNECTION_VALUES[dhcpIp]:-}" validate_ipv4)
   CONNECTION_VALUES[dhcpIp]="${dhcp_ip}"
 
-  ssh_user=$(prompt_for_value "SSH username" "${ssh_user}" )
+  local ssh_user
+  ssh_user=$(prompt_for_value "SSH username" "${CONNECTION_VALUES[sshUser]:-admin}" )
   CONNECTION_VALUES[sshUser]="${ssh_user}"
 
-  ssh_port=$(prompt_for_value "SSH port" "${ssh_port}" validate_port)
+  local ssh_port
+  ssh_port=$(prompt_for_value "SSH port" "${CONNECTION_VALUES[sshPort]:-22}" validate_port)
   CONNECTION_VALUES[sshPort]="${ssh_port}"
 
-  display_router_identity "${ssh_user}" "${ssh_port}" "${dhcp_ip}"
+  display_router_identity "${ssh_user}" "${ssh_port}" "${dhcp_ip}" || true
 
+  local subnet
   subnet=$(prompt_for_value "LAN subnet prefix length" "${GLOBAL_VALUES[subnet]:-24}" validate_prefix)
   GLOBAL_VALUES[subnet]="${subnet}"
 
@@ -538,6 +590,30 @@ main() {
   CONNECTION_VALUES[staticIp]="${GLOBAL_VALUES[bridgeIP]}"
 
   save_config
+  log "Configuration saved to ${CONFIG_FILE}."
+}
+
+deploy_bootstrap_configuration() {
+  load_config
+
+  ensure_connection_detail sshUser "SSH username" 
+  ensure_connection_detail sshPort "SSH port" validate_port
+  ensure_connection_detail dhcpIp "Current DHCP IP of MikroTik" validate_ipv4
+
+  local ssh_user=${CONNECTION_VALUES[sshUser]}
+  local ssh_port=${CONNECTION_VALUES[sshPort]}
+  local dhcp_ip=${CONNECTION_VALUES[dhcpIp]}
+
+  if [[ -z ${GLOBAL_VALUES[bridgeIP]:-} || -z ${GLOBAL_VALUES[subnet]:-} ]]; then
+    log "Bridge IP or subnet is not set. Use option 3) Edit configuration first."
+    return 1
+  fi
+
+  display_router_identity "${ssh_user}" "${ssh_port}" "${dhcp_ip}" || true
+
+  GLOBAL_VALUES[action]="apply"
+  CONNECTION_VALUES[staticIp]="${GLOBAL_VALUES[bridgeIP]}"
+  save_config
 
   local temp_script
   temp_script=$(mktemp)
@@ -555,4 +631,48 @@ main() {
   fi
 }
 
-main "$@"
+main_menu() {
+  detect_python
+  ensure_config_exists
+
+  while true; do
+    load_config
+    printf '\n === MikroTik CHR Bootstrap Utility ===\n\n'
+    printf '  Current configuration:\n\n'
+    print_configuration_summary
+    printf '\n  Menu:\n\n'
+    printf '  1) Test SSH connection to MikroTik\n'
+    printf '  2) Deploy (upload and run) Bootstrap config\n'
+    printf '  3) Edit configuration\n'
+    printf '  4) Exit\n\n'
+    printf 'Creative spark, AI prompting, and continuous debugging by: Attila Macskasy\n'
+    printf 'Code generated using: GPT-5 Codex (Preview) — Premium Model x1\n'
+    printf '(c) 2025 OpenLandingZone \\ OpenGWTools \\ Bootstrap Utility 1.0\n\n'
+
+    read -r -p 'Select an option [1-4]: ' choice || exit 0
+    case ${choice} in
+      1)
+        test_ssh_connection
+        pause_for_user
+        ;;
+      2)
+        deploy_bootstrap_configuration || true
+        pause_for_user
+        ;;
+      3)
+        interactive_edit_configuration
+        pause_for_user
+        ;;
+      4)
+        log "Goodbye."
+        exit 0
+        ;;
+      *)
+        log "Invalid selection '${choice}'. Please choose 1-4."
+        pause_for_user
+        ;;
+    esac
+  done
+}
+
+main_menu "$@"
