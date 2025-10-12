@@ -100,15 +100,9 @@ Once the VM finishes booting:
   ![SSH service listing](README.md.ipserviceprint.jpg)
 7. Continue with OpenGWTools Mikrotik Router OS Bootstrap to push default configuration via SSH.
 
-## Logs
-
-Every run writes an execution log (e.g., `deploy_chr_mvp_v1.log` if you tee the output) capturing menu selections, remote commands, and Proxmox responses. These logs are handy for diagnosing issues with disk import or VM configuration.
-
 ## Notes
 
 - The script deletes the uploaded raw image after the disk has been imported to keep `/var/lib/vz/template/iso` tidy.
 - If the specified VM already exists, the imported disk is attached in place of the existing `scsi0` entry. Any unused disks are detected automatically through `qm config`.
 - Networking defaults to a single VirtIO NIC bridged to `vmbr0`. Adjust `proxmox.bridge` in the JSON if you use a different bridge.
 - For serial console access you can use `qm terminal <VMID>` once the VM has started.
-
-Feel free to extend the menu with additional helpers (backups, snapshots, etc.) as your environment evolves.
