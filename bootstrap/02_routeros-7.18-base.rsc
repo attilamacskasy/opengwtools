@@ -1,13 +1,14 @@
 :global action apply
 
-:global routerName nemver
+:global routerName opengwtools
 
-:global bridgeIP 172.22.24.254
+:global bridgeIP 172.22.254.254
 :global subnet 24
 
-:global dhcpStart 172.22.24.224
-:global dhcpEnd 172.22.24.250
-:global dhcpNetAddr 172.22.24.0/24
+:global dhcpStart 172.22.254.224
+:global dhcpEnd 172.22.254.250
+:global dhcpNetAddr 172.22.254.0/24
+:global dhcpServerDisabled no
 
 :log info "Starting BASE parameterized configuration script.";
 
@@ -76,7 +77,7 @@
   /ip pool add name="default-dhcp" ranges="$dhcpStart-$dhcpEnd";
 
   :log info "Configuring DHCP server network address [$dhcpNetAddr].";
-  /ip dhcp-server add name=defconf address-pool="default-dhcp" interface=bridge lease-time=10m disabled=no;
+  /ip dhcp-server add name=defconf address-pool="default-dhcp" interface=bridge lease-time=10m disabled=$dhcpServerDisabled;
   /ip dhcp-server network add address=$dhcpNetAddr gateway=$bridgeIP dns-server=$bridgeIP comment="defconf";
 
   :log info "Enabling DHCP client on LAN [ether3-lan1] interface.";

@@ -1,0 +1,18 @@
+{
+  "connection": {
+    "sshUser": "admin",
+    "sshPort": 22,
+    "dhcpIp": "172.22.254.254",
+    "staticIp": "172.22.254.254"
+  },
+  "globals": {
+    "action": "apply",
+    "routerName": "opengwtools-254",
+    "bridgeIP": "172.22.254.254",
+    "subnet": 24,
+    "dhcpStart": "172.22.254.224",
+    "dhcpEnd": "172.22.254.250",
+    "dhcpNetAddr": "172.22.254.0/24",
+    "dhcpServerDisabled": "yes"
+  }
+}

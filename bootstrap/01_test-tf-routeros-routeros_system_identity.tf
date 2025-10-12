@@ -7,7 +7,7 @@ terraform {
 }
 
 provider "routeros" {
-  hosturl        = "apis://172.22.24.254:8729"   # env ROS_HOSTURL or MIKROTIK_HOST
+  hosturl        = "apis://172.22.254.254:8729"   # env ROS_HOSTURL or MIKROTIK_HOST
   username       = "terraform"                   # env ROS_USERNAME or MIKROTIK_USER
   password       = "setup1setup1"                # env ROS_PASSWORD or MIKROTIK_PASSWORD
   ca_certificate = "${path.module}/certs/terraform-ca.crt"
