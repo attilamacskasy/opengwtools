@@ -460,6 +460,56 @@ display_router_identity() {
   return 0
 }
 
+reset_known_host_entry() {
+  local host="$1"
+  local port="$2"
+  if ! command -v ssh-keygen >/dev/null 2>&1; then
+    return
+  fi
+
+  local cleaned=0
+  if [[ ${port} = "22" || ${port} = 22 ]]; then
+    if ssh-keygen -R "${host}" >/dev/null 2>&1; then
+      cleaned=1
+    fi
+  fi
+  if ssh-keygen -R "[${host}]:${port}" >/dev/null 2>&1; then
+    cleaned=1
+  fi
+
+  if (( cleaned )); then
+    log "Reset local SSH host key entry for ${host}:${port}."
+  fi
+}
+
+print_bootstrap_summary() {
+  local _user="$1"
+  local _port="$2"
+  local target_ip="$3"
+
+  local bridge_ip="${GLOBAL_VALUES[bridgeIP]:-${target_ip}}"
+  local subnet="${GLOBAL_VALUES[subnet]:-24}"
+  local dhcp_start="${GLOBAL_VALUES[dhcpStart]:-}"
+  local dhcp_end="${GLOBAL_VALUES[dhcpEnd]:-}"
+  local dhcp_net="${GLOBAL_VALUES[dhcpNetAddr]:-}"
+  local router_name="${GLOBAL_VALUES[routerName]:-opengwtools}"
+  local dhcp_disabled="${GLOBAL_VALUES[dhcpServerDisabled]:-no}"
+
+  printf '\n  Post-bootstrap verification (Winbox recommended):\n\n'
+  printf '    - Reconnect with Winbox to %s (or the IP you assigned).\n' "${bridge_ip}"
+  printf '    - System → Identity should show: %s\n' "${router_name}"
+  printf '    - Interfaces renamed: ether1 → ether1-wan1; additional ports tagged as ether*-lan#.\n'
+  printf '    - Bridge interface "bridge" present with static address %s/%s (comment defconf).\n' "${bridge_ip}" "${subnet}"
+  printf '    - IP → DNS allows remote requests and contains static entry router.lan → %s.\n' "${bridge_ip}"
+  printf '    - IP → Pool lists "default-dhcp" covering %s-%s.\n' "${dhcp_start}" "${dhcp_end}"
+  printf '    - IP → DHCP Server has "defconf" on bridge with network %s (disabled=%s).\n' "${dhcp_net}" "${dhcp_disabled}"
+  printf '    - IP → DHCP Client enabled on ether1-wan1 when a dedicated WAN port exists.\n'
+  printf '    - IP → Firewall → NAT includes defconf masquerade for out-interface-list=WAN.\n'
+  printf '    - IP → Firewall → Filter retains defconf accept/drop baseline plus fasttrack rule.\n'
+  printf '    - IP → Neighbor Discovery and MAC server lists restricted to LAN.\n'
+  printf '\n  No SSH summary is collected automatically; confirm the above items through the Winbox UI.\n\n'
+}
+
 print_configuration_summary() {
   printf '  Connection:\n'
   for key in sshUser sshPort dhcpIp staticIp; do
@@ -501,9 +551,9 @@ test_ssh_connection() {
 
   local ssh_user=${CONNECTION_VALUES[sshUser]:-admin}
   local ssh_port=${CONNECTION_VALUES[sshPort]:-22}
-  local default_target=${CONNECTION_VALUES[staticIp]:-}
+  local default_target=${CONNECTION_VALUES[dhcpIp]:-}
   if [[ -z ${default_target} ]]; then
-    default_target=${CONNECTION_VALUES[dhcpIp]:-}
+    default_target=${CONNECTION_VALUES[staticIp]:-}
   fi
 
   local target
@@ -557,7 +607,69 @@ interactive_edit_configuration() {
   local dhcp_end
   while true; do
     local start_default=${SUGGESTED_VALUES[dhcpStart]:-${GLOBAL_VALUES[dhcpStart]:-}}
-    local end_default=${SUGGESTED_VALUES[dhcpEnd]:-${GLOBAL_VALUES[dhcpEnd]:-}}
+  local ssh_command=':local identity [/system identity get name];
+:local bridgeAddr "";
+:local dhcpNetwork "";
+:local dhcpGateway "";
+:local dhcpPool "";
+:local dhcpDisabled "";
+
+/ip address {
+  :local addrId [find where interface="bridge" && comment="defconf"];
+  :if ([:len $addrId] = 0) do={ :set addrId [find where interface="bridge"]; }
+  :if ([:len $addrId] > 0) do={ :set bridgeAddr [/ip address get $addrId address]; }
+}
+
+/ip dhcp-server {
+  :local srvId [find where name="defconf"];
+  :if ([:len $srvId] > 0) do={ :set dhcpDisabled [/ip dhcp-server get $srvId disabled]; }
+}
+
+/ip dhcp-server network {
+  :local netId [find where comment="defconf"];
+  :if ([:len $netId] = 0) do={ :set netId [find]; }
+  :if ([:len $netId] > 0) do={
+    :set dhcpNetwork [/ip dhcp-server network get $netId address];
+    :set dhcpGateway [/ip dhcp-server network get $netId gateway];
+  }
+}
+
+/ip pool {
+  :local poolId [find where name="default-dhcp"];
+  :if ([:len $poolId] > 0) do={ :set dhcpPool [/ip pool get $poolId ranges]; }
+}
+
+:put ("identity=" . $identity);
+:put ("bridgeAddress=" . $bridgeAddr);
+:put ("dhcpNetwork=" . $dhcpNetwork);
+:put ("dhcpGateway=" . $dhcpGateway);
+:put ("dhcpPool=" . $dhcpPool);
+:put ("dhcpServerDisabled=" . $dhcpDisabled);
+'
+
+  local raw
+  local exit_code
+
+  set +e
+  raw=$(ssh -T -o BatchMode=yes -o PreferredAuthentications=publickey,password -o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -p "${port}" "${user}@${target_ip}" "${ssh_command}")
+  exit_code=$?
+  set -e
+
+  if (( exit_code != 0 && exit_code == 255 )); then
+    if command -v sshpass >/dev/null 2>&1; then
+      local summary_pass
+      read -rs -p "[bootstrap-routeros] Router password (for summary): " summary_pass || summary_pass=""
+      printf '\n'
+      if [[ -n ${summary_pass} ]]; then
+        set +e
+        SSHPASS="${summary_pass}" raw=$(sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -p "${port}" "${user}@${target_ip}" "${ssh_command}")
+        exit_code=$?
+        set -e
+      fi
+      unset summary_pass SSHPASS
+    fi
+  fi
+
     dhcp_start=$(prompt_for_value "DHCP pool start" "${start_default}" validate_ipv4)
     dhcp_end=$(prompt_for_value "DHCP pool end" "${end_default}" validate_ipv4)
     if validate_dhcp_range "${dhcp_start}" "${dhcp_end}" "${GLOBAL_VALUES[dhcpNetAddr]}" "${GLOBAL_VALUES[bridgeIP]}"; then
@@ -625,9 +737,12 @@ deploy_bootstrap_configuration() {
   log "Allowing the router to apply configuration..."
   sleep 10
 
+  reset_known_host_entry "${GLOBAL_VALUES[bridgeIP]}" "${ssh_port}"
+
   if verify_new_connection "${ssh_user}" "${ssh_port}" "${GLOBAL_VALUES[bridgeIP]}"; then
     ensure_remote_script_registered "${ssh_user}" "${ssh_port}" "${GLOBAL_VALUES[bridgeIP]}"
-    log "Tip: open RouterOS log (/log print follow) to review bootstrap events."
+    print_bootstrap_summary "${ssh_user}" "${ssh_port}" "${GLOBAL_VALUES[bridgeIP]}"
+    log "Tip: run '/log print follow' on the router to review bootstrap events."
   fi
 }
 
@@ -647,7 +762,7 @@ main_menu() {
     printf '  4) Exit\n\n'
     printf 'Creative spark, AI prompting, and continuous debugging by: Attila Macskasy\n'
     printf 'Code generated using: GPT-5 Codex (Preview) — Premium Model x1\n'
-    printf '(c) 2025 OpenLandingZone \\ OpenGWTools \\ Bootstrap Utility 1.0\n\n'
+    printf '(c) 2025 OpenLandingZone \\ OpenGWTools \\ Bootstrap Utility 1.1\n\n'
 
     read -r -p 'Select an option [1-4]: ' choice || exit 0
     case ${choice} in

@@ -26,29 +26,90 @@
   :log info "Setting router identity.";
   /system identity set name=$routerName;
 
-  :log info "Creating interface lists.";
-  /interface list add name=WAN comment="defconf";
-  /interface list add name=LAN comment="defconf";
+  :log info "Ensuring interface lists exist.";
+  :if ([:len [/interface list find where name="WAN"]] = 0) do={
+    /interface list add name=WAN comment="defconf";
+  } else={
+    :log info "Interface list WAN already present.";
+  }
+  :if ([:len [/interface list find where name="LAN"]] = 0) do={
+    /interface list add name=LAN comment="defconf";
+  } else={
+    :log info "Interface list LAN already present.";
+  }
 
-  :log info "Renaming ether interfaces.";
-  /interface set ether1 name=ether1-wan1;
-  :log info "Renamed ether1 to ether1-wan1.";
-  /interface set ether2 name=ether2-wan2;
-  :log info "Renamed ether2 to ether2-wan2.";
-  /interface set ether3 name=ether3-lan1;
-  :log info "Renamed ether3 to ether3-lan1.";
+  :log info "Renaming ethernet interfaces based on defaults.";
+  :local wanPrimary "";
+  :local lanPrimary "";
+  :local lanIndex 1;
+  :local singleInterfaceMode 0;
+  :foreach ethId in=[/interface ethernet find] do={
+    :local defaultName [/interface ethernet get $ethId default-name];
+    :if ($defaultName = "") do={
+      :set defaultName [/interface ethernet get $ethId name];
+    }
+    :local currentName [/interface ethernet get $ethId name];
+    :local newName $currentName;
 
-  :log info "Creating bridge interface.";
-  /interface bridge add name=bridge disabled=no auto-mac=yes protocol-mode=rstp comment=defconf;
+    :if ($defaultName = "ether1") do={
+      :set newName "ether1-wan1";
+      :set wanPrimary $newName;
+      :if ($currentName != $newName) do={
+        :log info ("Renaming " . $currentName . " to " . $newName . ".");
+        /interface set $ethId name=$newName;
+      } else={
+        :log info ("Interface " . $currentName . " already named.");
+      }
+      :if ([:len [/interface list member find where list=WAN && interface=$newName]] = 0) do={
+        /interface list member add list=WAN interface=$newName comment="defconf";
+      }
+    } else={
+      :set newName ($defaultName . "-lan" . $lanIndex);
+      :if ($currentName != $newName) do={
+        :log info ("Renaming " . $currentName . " to " . $newName . ".");
+        /interface set $ethId name=$newName;
+      } else={
+        :log info ("Interface " . $currentName . " already named.");
+      }
+      :if ($lanPrimary = "") do={
+        :set lanPrimary $newName;
+      }
+      :if ([:len [/interface list member find where list=LAN && interface=$newName]] = 0) do={
+        /interface list member add list=LAN interface=$newName comment="defconf";
+      }
+      :set lanIndex ($lanIndex + 1);
+    }
+  }
 
-  :log info "Assigning interfaces to respective interface lists.";
-  /interface list member add list=WAN interface=ether1-wan1 comment="defconf";
-  /interface list member add list=WAN interface=ether2-wan2 comment="defconf";
-  /interface list member add list=LAN interface=bridge comment="defconf";
+  :if (($lanPrimary = "") && ($wanPrimary != "")) do={
+    :log warning "Only one Ethernet interface detected; using $wanPrimary for LAN bridge and skipping WAN-specific features.";
+    :set lanPrimary $wanPrimary;
+    :set singleInterfaceMode 1;
+    :foreach memberId in=[/interface list member find where list=WAN && interface=$wanPrimary] do={
+      /interface list member remove $memberId;
+    }
+    :if ([:len [/interface list member find where list=LAN && interface=$wanPrimary]] = 0) do={
+      /interface list member add list=LAN interface=$wanPrimary comment="defconf-single";
+    }
+  }
 
-  :log info "Adding available interfaces to the bridge (except WAN interfaces).";
+  :if ($wanPrimary = "") do={
+    :log warning "No Ethernet interfaces detected for WAN role.";
+  }
+
+  :log info "Ensuring bridge interface exists.";
+  :if ([:len [/interface bridge find where name="bridge"]] = 0) do={
+    /interface bridge add name=bridge disabled=no auto-mac=yes protocol-mode=rstp comment=defconf;
+  } else={
+    /interface bridge set bridge disabled=no protocol-mode=rstp comment="defconf";
+  }
+  :if ([:len [/interface list member find where list=LAN && interface="bridge"]] = 0) do={
+    /interface list member add list=LAN interface=bridge comment="defconf";
+  }
+
+  :log info "Adding LAN interfaces to the bridge.";
   :local bMACIsSet 0;
-  :foreach k in=[/interface find where !(slave=yes  || name="ether1-wan1" || name="ether2-wan2" || name~"bridge")] do={
+  :foreach k in=[/interface find where (name~"-lan" && !(slave=yes) && !(name~"bridge"))] do={
     :local tmpPortName [/interface get $k name];
     :if ($bMACIsSet = 0) do={
       :if ([/interface get $k type] = "ether") do={
@@ -57,9 +118,30 @@
         :set bMACIsSet 1;
       }
     }
-    :log info "Adding interface $tmpPortName to bridge.";
-    /interface bridge port add bridge=bridge interface=$tmpPortName comment=defconf;
+    :if ([:len [/interface bridge port find where interface=$tmpPortName]] = 0) do={
+      :log info "Adding interface $tmpPortName to bridge.";
+      /interface bridge port add bridge=bridge interface=$tmpPortName comment=defconf;
+    } else={
+      :log info "Interface $tmpPortName already part of bridge.";
+    }
   };
+
+  :if (($singleInterfaceMode = 1) && ($lanPrimary != "")) do={
+    :if ($bMACIsSet = 0) do={
+      :local lanIfaceId [/interface find where name=$lanPrimary];
+      :if ([:len $lanIfaceId] > 0) do={
+        :if ([/interface get $lanIfaceId type] = "ether") do={
+          :log info "Setting bridge MAC address from $lanPrimary.";
+          /interface bridge set "bridge" auto-mac=no admin-mac=[/interface ethernet get $lanPrimary mac-address];
+          :set bMACIsSet 1;
+        }
+      }
+    }
+    :if ([:len [/interface bridge port find where interface=$lanPrimary]] = 0) do={
+      :log info "Adding single-interface $lanPrimary to bridge.";
+      /interface bridge port add bridge=bridge interface=$lanPrimary comment="defconf-single";
+    }
+  }
 
   :log info "Waiting 10s before setting bridge IP address.";
   :delay 10s;
@@ -80,8 +162,17 @@
   /ip dhcp-server add name=defconf address-pool="default-dhcp" interface=bridge lease-time=10m disabled=$dhcpServerDisabled;
   /ip dhcp-server network add address=$dhcpNetAddr gateway=$bridgeIP dns-server=$bridgeIP comment="defconf";
 
-  :log info "Enabling DHCP client on LAN [ether3-lan1] interface.";
-  /ip dhcp-client add interface=ether3-lan1 disabled=no comment="defconf";
+  :if (($wanPrimary != "") && ($singleInterfaceMode = 0)) do={
+    :log info "Enabling DHCP client on WAN interface.";
+    :local dhcpId [/ip dhcp-client find where interface=$wanPrimary];
+    :if ([:len $dhcpId] = 0) do={
+      /ip dhcp-client add interface=$wanPrimary disabled=no comment="defconf";
+    } else={
+      /ip dhcp-client set $dhcpId disabled=no;
+    }
+  } else={
+    :log warning "Skipping DHCP client configuration (WAN interface unavailable).";
+  }
 
   :log info "Configuring NAT masquerade.";
   /ip firewall nat add chain=srcnat out-interface-list=WAN ipsec-policy=out,none action=masquerade comment="defconf: masquerade";

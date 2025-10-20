@@ -2,7 +2,7 @@
   "connection": {
     "sshUser": "admin",
     "sshPort": 22,
-    "dhcpIp": "172.22.254.254",
+    "dhcpIp": "172.22.22.245",
     "staticIp": "172.22.254.254"
   },
   "globals": {
