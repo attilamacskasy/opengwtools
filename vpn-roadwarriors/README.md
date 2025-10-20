@@ -4,15 +4,21 @@ Interactive helper for managing a MikroTik WireGuard "roadwarrior" (remote user)
 
 ## Overview
 
-`vpn_roadwarriors.py` provides a lightweight menu to keep a WireGuard server interface and its peers in sync between a MikroTik CHR and the local JSON cache:
+`vpn_roadwarriors.py` provides a lightweight menu to keep a WireGuard server interface and its peers in sync between a MikroTik CHR and the local JSON cache. The VPN helper and the bootstrap/proxmox tooling in the repository are designed to run independently—only the shared configuration files tie them together.
 
 1. **Test SSH connection to MikroTik** – Quickly validate credentials/IP before making changes. The stored router IP defaults to the static address from `bootstrap/bootstrap_routeros.json`, but any new value entered here will be saved back to `vpn-roadwarriors.json` for future runs.
 2. **Check and create WireGuard Server** – Ensures the `opengwtools-roadwarriors` interface exists, generates server keys if missing, sets the listen port and interface address, and reconciles the local cache with peers found on the router.
 3. **Add new WireGuard Peer** – Prompts for the user's name and an optional comment, creates a unique peer on the CHR (allocating the next free address in `10.255.0.0/24`), stores the keys in `vpn-roadwarriors.json`, and writes a ready-to-import WireGuard client configuration into `clients/`.
-4. **Remove WireGuard Peer** – Lets you pick a cached peer, removes it from the MikroTik and deletes the corresponding client configuration file.
-5. **Exit** – Leaves the utility.
+4. **Remove WireGuard Peer** – Lets you pick a cached peer, removes it from the MikroTik and deletes the corresponding client configuration file. The removal list is numbered so you can safely target the intended user, and the script confirms each deletion across the router, JSON, and local file system.
+5. **List WireGuard Peers** – Displays the managed peers in a numbered table (this option appears once at least one peer exists).
+6. **Exit** – Leaves the utility.
 
 All peer records are written to `vpn-roadwarriors.json` alongside the server metadata so that rerunning the tool keeps state. The generated `.conf` files live under `vpn-roadwarriors/clients/` and are named using the pattern `<firstname>-<lastname>-<RANDOMID>.conf`, matching the peer identity stored on the router.
+
+> **Quick checklist before each run**
+>
+> 1. Open `vpn-roadwarriors.json` and confirm the connection (SSH) and server values are current—especially `routerIp`, `routerPublicIp`, and the baseline allowed networks.
+> 2. Verify passwordless SSH or test your credentials against the MikroTik CHR; the menu includes a dedicated option for this, but confirming ahead of time avoids failed provisioning runs.
 
 ### Allowed IP defaults
 
@@ -48,3 +54,13 @@ After adding a peer, copy the generated `.conf` file to the end user. In the Wir
 3. Click **Activate** to establish the VPN connection
 
 The configuration includes a full-tunnel (`0.0.0.0/0`) policy and a persistent keepalive value of 25 seconds; adjust these defaults in the script if your deployment requires different behavior.
+
+### Importing on iPhone / iPad
+
+The iOS WireGuard client exposes the `Allowed IPs` fields only when a configuration file is imported. Do **not** create tunnels from scratch inside the app—manual creation hides the advanced routing values and the tunnel will default to a single host route.
+
+1. Email (or otherwise securely transfer) the generated `.conf` file to the user.
+2. On the iPhone, open the message and tap the attachment, then choose **Copy to WireGuard** (or **Open in WireGuard**).
+3. When the WireGuard app opens, pick **Create from file or archive** and select the downloaded configuration.
+4. Review the imported tunnel details; the `Allowed IPs` section should already list the baseline networks defined in `vpn-roadwarriors.json`.
+5. Tap **Save**, then toggle the switch to activate the VPN.
