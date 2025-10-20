@@ -64,3 +64,13 @@ The iOS WireGuard client exposes the `Allowed IPs` fields only when a configurat
 3. When the WireGuard app opens, pick **Create from file or archive** and select the downloaded configuration.
 4. Review the imported tunnel details; the `Allowed IPs` section should already list the baseline networks defined in `vpn-roadwarriors.json`.
 5. Tap **Save**, then toggle the switch to activate the VPN.
+
+## Windows compatibility notes
+
+The utility was originally authored on Ubuntu, but the current release includes several improvements to work smoothly on Windows as well:
+
+- **Password-based SSH** – When `sshpass` is unavailable (default on Windows), the script falls back to Paramiko so you can enter the router password once and reuse the same session. Install it with `pip install paramiko`.
+- **Handled ANSI colors** – The prompts now auto-detect consoles that don’t support ANSI escape sequences and disable color codes to avoid stray `←[90m` artifacts.
+- **Plain-text command output** – SSH responses invoked through Paramiko are decoded and printed without the Python byte-string prefixes (no `b'…'` clutter), matching the Linux behavior.
+
+With these adjustments the menu flow, WireGuard provisioning, and file generation behave the same on both Windows PowerShell and Linux shells.

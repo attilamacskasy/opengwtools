@@ -16,6 +16,11 @@ import subprocess
 import sys
 import textwrap
 
+try:
+    import paramiko  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    paramiko = None  # type: ignore
+
 COLOR_CMD = "\033[90m"  # dark gray
 COLOR_RESET = "\033[0m"
 
@@ -36,6 +41,24 @@ HEADER_BAR = "=" * 45
 HEADER_TITLE = "=== MikroTik CHR VPN Roadwarriors Utility ==="
 TAGLINE = "Creative spark and vibe AI coding with continuous debugging and improvements by: Attila Macskasy"
 MODEL_LINE = "Code generated using: GPT-5 Codex (Preview) — Premium Model x1"
+
+
+def _supports_ansi_colors() -> bool:
+    if not sys.stdout.isatty():  # pragma: no cover - environment dependent
+        return False
+    if os.name != "nt":
+        return True
+    return bool(
+        os.environ.get("ANSICON")
+        or os.environ.get("WT_SESSION")
+        or os.environ.get("TERM_PROGRAM") == "vscode"
+        or os.environ.get("TERM", "").startswith("xterm")
+    )
+
+
+if not _supports_ansi_colors():
+    COLOR_CMD = ""
+    COLOR_RESET = ""
 
 
 def build_menu(config: Dict[str, Any]) -> Tuple[str, Set[str]]:
@@ -126,7 +149,7 @@ class SSHClient:
         ]
         result = subprocess.run(base_cmd, capture_output=True, text=True)
 
-        if result.returncode == 255 and allow_password and self.sshpass_path:
+        if result.returncode == 255 and allow_password:
             if self.password is None:
                 try:
                     self.password = getpass.getpass(
@@ -135,23 +158,32 @@ class SSHClient:
                 except (EOFError, KeyboardInterrupt):
                     print("\n[vpn-roadwarriors] Password prompt cancelled.")
                     raise
-            env = os.environ.copy()
-            env["SSHPASS"] = self.password
-            pass_cmd = [
-                self.sshpass_path,
-                "-e",
-                "ssh",
-                "-T",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                "-o",
-                "ConnectTimeout=10",
-                "-p",
-                str(self.port),
-                f"{self.user}@{self.host}",
-                command,
-            ]
-            result = subprocess.run(pass_cmd, capture_output=True, text=True, env=env)
+
+            if self.sshpass_path:
+                env = os.environ.copy()
+                env["SSHPASS"] = self.password or ""
+                pass_cmd = [
+                    self.sshpass_path,
+                    "-e",
+                    "ssh",
+                    "-T",
+                    "-o",
+                    "StrictHostKeyChecking=accept-new",
+                    "-o",
+                    "ConnectTimeout=10",
+                    "-p",
+                    str(self.port),
+                    f"{self.user}@{self.host}",
+                    command,
+                ]
+                result = subprocess.run(pass_cmd, capture_output=True, text=True, env=env)
+            elif paramiko is not None:
+                result = self._run_with_paramiko(command, base_cmd)
+            else:
+                print(
+                    "[vpn-roadwarriors] Password authentication failed and sshpass/paramiko are unavailable. "
+                    "Install paramiko (`pip install paramiko`) or configure key-based SSH access."
+                )
 
         if result.stdout:
             print(f"{COLOR_CMD}[vpn-roadwarriors] <- stdout:{COLOR_RESET}")
@@ -168,6 +200,46 @@ class SSHClient:
                 stderr=result.stderr,
             )
         return result
+
+    def _run_with_paramiko(
+        self, command: str, base_cmd: List[str]
+    ) -> subprocess.CompletedProcess[str]:
+        if paramiko is None:  # pragma: no cover
+            raise RuntimeError("Paramiko is not available.")
+
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh_client.connect(
+            hostname=self.host,
+            port=self.port,
+            username=self.user,
+            password=self.password,
+            look_for_keys=False,
+            allow_agent=False,
+            timeout=10,
+        )
+
+        transport = ssh_client.get_transport()
+        if transport is None:
+            ssh_client.close()
+            raise RuntimeError("Failed to establish SSH transport.")
+
+        channel = transport.open_session()
+        channel.exec_command(command)
+        stdout_file = channel.makefile("rb", -1)
+        stderr_file = channel.makefile_stderr("rb", -1)
+        stdout_bytes = stdout_file.read()
+        stderr_bytes = stderr_file.read()
+        stdout_file.close()
+        stderr_file.close()
+        exit_status = channel.recv_exit_status()
+        channel.close()
+        ssh_client.close()
+
+        stdout_text = stdout_bytes.decode("utf-8", errors="replace")
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace")
+
+        return subprocess.CompletedProcess(base_cmd, exit_status, stdout_text, stderr_text)
 
 
 def ensure_config_exists() -> None:
