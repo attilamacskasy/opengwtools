@@ -20,7 +20,7 @@ COLOR_CMD = "\033[90m"  # dark gray
 COLOR_RESET = "\033[0m"
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = SCRIPT_DIR / "vpn-roadwarriors.json"
@@ -32,18 +32,67 @@ DEFAULT_LISTEN_PORT = 51820
 DEFAULT_SERVER_ADDRESS = "10.255.0.1/24"
 DEFAULT_PEER_NETWORK = "10.255.0.0/24"
 DEFAULT_DNS = "10.255.0.1"
-MENU_TEXT = textwrap.dedent(
-        """
-        ===============================
-        VPN Roadwarriors Utility
-        ===============================
-            1) Test SSH connection to MikroTik
-            2) Check and create WireGuard Server
-            3) Add new WireGuard Peer
-            4) Remove WireGuard Peer
-            5) Exit
-        """
-)
+HEADER_BAR = "=" * 45
+HEADER_TITLE = "=== MikroTik CHR VPN Roadwarriors Utility ==="
+TAGLINE = "Creative spark and vibe AI coding with continuous debugging and improvements by: Attila Macskasy"
+MODEL_LINE = "Code generated using: GPT-5 Codex (Preview) — Premium Model x1"
+
+
+def build_menu(config: Dict[str, Any]) -> Tuple[str, Set[str]]:
+    peers = config.get("peers", [])
+    peer_count = len(peers)
+    lines = [
+        f"Currently configured WireGuard Peers: {peer_count}",
+        "",
+        "Menu:",
+        "",
+        "    1) Test SSH connection to MikroTik",
+        "    2) Check and create WireGuard Server",
+        "    3) Add new WireGuard Peer",
+        "    4) Remove WireGuard Peer",
+    ]
+    valid_choices: Set[str] = {"1", "2", "3", "4", "6"}
+    if peer_count > 0:
+        lines.append("    5) List WireGuard Peers")
+        valid_choices.add("5")
+    lines.append("    6) Exit")
+    menu_text = "\n".join(lines) + "\n"
+    return menu_text, valid_choices
+
+
+def _mask_sensitive_value(key: str, value: Any) -> str:
+    if isinstance(value, str):
+        if "key" in key.lower():
+            if len(value) <= 6:
+                return (value[:1] + "***") if value else "***"
+            return f"{value[:3]}***{value[-3:]}"
+        return value
+    if isinstance(value, list):
+        return ", ".join(
+            _mask_sensitive_value(key, item) if isinstance(item, str) else str(item) for item in value
+        )
+    if isinstance(value, dict):
+        return json.dumps(value)
+    return str(value)
+
+
+def print_config_summary(config: Dict[str, Any]) -> None:
+    print(HEADER_BAR)
+    print(HEADER_TITLE)
+    print(HEADER_BAR)
+    print(f"Configuration loaded from file: {CONFIG_PATH.name}\n")
+
+    connection = config.get("connection", {})
+    server = config.get("server", {})
+
+    print("[vpn-roadwarriors] Connection settings:")
+    for key, value in connection.items():
+        print(f"  {key}: {_mask_sensitive_value(key, value)}")
+    print()
+    print("[vpn-roadwarriors] Server settings:")
+    for key, value in server.items():
+        print(f"  {key}: {_mask_sensitive_value(key, value)}")
+    print()
 
 
 class SSHClient:
@@ -148,6 +197,7 @@ def ensure_config_exists() -> None:
             "sshUser": "admin",
             "sshPort": 22,
             "routerIp": default_ip,
+            "routerPublicIp": default_ip,
         },
         "server": {
             "interfaceName": DEFAULT_INTERFACE_NAME,
@@ -178,6 +228,7 @@ def load_config() -> Dict[str, Any]:
     conn.setdefault("sshUser", "admin")
     conn.setdefault("sshPort", 22)
     conn.setdefault("routerIp", DEFAULT_ROUTER_IP)
+    conn.setdefault("routerPublicIp", conn.get("routerIp", DEFAULT_ROUTER_IP))
     conn["sshPort"] = int(conn.get("sshPort", 22))
 
     server = data["server"]
@@ -641,7 +692,8 @@ def add_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
         "createdAt": datetime.datetime.utcnow().isoformat() + "Z",
     }
 
-    router_ip = config["connection"]["routerIp"]
+    connection = config["connection"]
+    router_endpoint = connection.get("routerPublicIp") or connection.get("routerIp")
     listen_port = server["listenPort"]
     dns = server.get("dns", DEFAULT_DNS)
 
@@ -656,7 +708,7 @@ def add_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
         dns=dns,
         peer_name=peer_name,
         server_public=server_public,
-        router_ip=router_ip,
+    router_ip=router_endpoint,
         listen_port=listen_port,
         preshared_key=peer_record.get("presharedKey", ""),
         allowed_ips=client_allowed_ips,
@@ -688,16 +740,37 @@ def add_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
     print(instructions)
 
 
-def list_peers(config: Dict[str, Any]) -> None:
+def list_peers(config: Dict[str, Any], *, show_indexes: bool = True) -> None:
     peers = config.get("peers", [])
     if not peers:
         print("[vpn-roadwarriors] No WireGuard peers recorded.")
         return
-    print("\nConfigured peers:")
-    for index, peer in enumerate(peers, start=1):
-        print(
-            f"  {index}) {peer.get('id')}  |  {peer.get('firstName')} {peer.get('lastName')}  |  {peer.get('allowedAddress')}  |  {peer.get('comment') or '(no comment)'}"
+    id_width = max(len("ID"), *(len(str(peer.get("id", ""))) for peer in peers))
+    first_width = max(len("First name"), *(len(str(peer.get("firstName", ""))) for peer in peers))
+    last_width = max(len("Last name"), *(len(str(peer.get("lastName", ""))) for peer in peers))
+
+    if show_indexes:
+        index_width = len(str(len(peers)))
+        header = (
+            f"{'#':>{index_width}}  {'ID':<{id_width}}  "
+            f"{'First name':<{first_width}}  {'Last name':<{last_width}}  Comment"
         )
+    else:
+        header = f"{'ID':<{id_width}}  {'First name':<{first_width}}  {'Last name':<{last_width}}  Comment"
+    print("\nConfigured peers:")
+    print(header)
+    print("-" * len(header))
+    for index, peer in enumerate(peers, start=1):
+        comment = peer.get("comment") or ""
+        if show_indexes:
+            print(
+                f"{index:>{index_width}}  {peer.get('id', ''):<{id_width}}  "
+                f"{peer.get('firstName', ''):<{first_width}}  {peer.get('lastName', ''):<{last_width}}  {comment}"
+            )
+        else:
+            print(
+                f"{peer.get('id', ''):<{id_width}}  {peer.get('firstName', ''):<{first_width}}  {peer.get('lastName', ''):<{last_width}}  {comment}"
+            )
 
 
 def remove_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
@@ -706,7 +779,7 @@ def remove_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
         print("[vpn-roadwarriors] No peers to remove.")
         return
 
-    list_peers(config)
+    list_peers(config, show_indexes=True)
     while True:
         raw = input("Select peer to remove (number, or press Enter to cancel): ").strip()
         if not raw:
@@ -726,7 +799,14 @@ def remove_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
         print("[vpn-roadwarriors] Selected peer lacks a recorded public key. Nothing to remove.")
         return
 
+    peer_id = peer.get("id") or "(unknown)"
+    confirm = input(f"Type 'yes' to confirm removal of peer {peer_id}: ").strip().lower()
+    if confirm != "yes":
+        print("[vpn-roadwarriors] Removal aborted by user.")
+        return
+
     iface = config["server"]["interfaceName"]
+    print(f"[vpn-roadwarriors] Removing peer {peer_id} from router interface {iface}...")
     remove_script = textwrap.dedent(
         f"""
         :local target [/interface/wireguard peers find where interface="{iface}" && public-key="{public_key}"];
@@ -740,37 +820,45 @@ def remove_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
     status = parse_key_value_lines(result.stdout).get("status")
 
     if status != "removed":
-        print("[vpn-roadwarriors] Router did not remove the peer (status: {status}).")
+        print(f"[vpn-roadwarriors] Router did not remove the peer (status: {status}).")
         return
 
+    print(f"[vpn-roadwarriors] Router removal confirmed for {peer_id}.")
     config["peers"].pop(index - 1)
     save_config(config)
+    print(f"[vpn-roadwarriors] Removed peer {peer_id} from local configuration cache.")
 
     config_path = peer.get("configFile")
     if config_path:
+        print(f"[vpn-roadwarriors] Deleting local config file {config_path}...")
         try:
             Path(config_path).unlink(missing_ok=True)  # type: ignore[arg-type]
             print(f"[vpn-roadwarriors] Deleted {config_path}.")
         except OSError:
             print(f"[vpn-roadwarriors] Unable to delete {config_path}; remove it manually if desired.")
 
-    print(f"[vpn-roadwarriors] Peer {peer.get('id')} removed from router and local cache.")
+    print(f"[vpn-roadwarriors] Peer {peer_id} removed from router and local cache.")
 
 
 def main() -> None:
     ensure_config_exists()
     config = load_config()
+    print_config_summary(config)
     ssh_client: Optional[SSHClient] = None
 
     while True:
-        print(MENU_TEXT)
+        menu_text, valid_choices = build_menu(config)
+        print(menu_text)
+        print(TAGLINE)
+        print(MODEL_LINE)
+        print()
         choice = input("Select an option: ").strip()
 
-        if choice not in {"1", "2", "3", "4", "5"}:
-            print("[vpn-roadwarriors] Invalid selection. Choose 1-5.")
+        if choice not in valid_choices:
+            print(f"[vpn-roadwarriors] Invalid selection. Choose from: {', '.join(sorted(valid_choices))}.")
             continue
 
-        if choice == "5":
+        if choice == "6":
             print("[vpn-roadwarriors] Goodbye.")
             break
 
@@ -787,6 +875,8 @@ def main() -> None:
             add_wireguard_peer(config, ssh_client)
         elif choice == "4":
             remove_wireguard_peer(config, ssh_client)
+        elif choice == "5":
+            list_peers(config)
 
 
 if __name__ == "__main__":

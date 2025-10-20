@@ -2,7 +2,8 @@
   "connection": {
     "sshUser": "admin",
     "sshPort": 22,
-    "routerIp": "172.22.254.254"
+    "routerIp": "172.22.22.254",
+    "routerPublicIp": ""
   },
   "server": {
     "interfaceName": "opengwtools-roadwarriors",
