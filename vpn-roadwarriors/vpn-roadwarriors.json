@@ -1,0 +1,23 @@
+{
+  "connection": {
+    "sshUser": "admin",
+    "sshPort": 22,
+    "routerIp": "172.22.254.254"
+  },
+  "server": {
+    "interfaceName": "opengwtools-roadwarriors",
+    "listenPort": 51820,
+    "address": "10.255.0.1/24",
+    "peerNetworkCidr": "10.255.0.0/24",
+    "dns": "10.255.0.1",
+    "publicKey": "",
+    "privateKey": "",
+    "baselineAllowedIps": [
+      "172.22.16.0/24",
+      "172.22.18.0/24",
+      "172.22.22.0/24"
+    ]
+  },
+  "peers": [
+  ]
+}
