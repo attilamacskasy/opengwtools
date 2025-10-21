@@ -8,11 +8,31 @@ Manage a MikroTik CHR "roadwarrior" WireGuard deployment from your workstation. 
 
 1. **Review prerequisites** → Install the required tools for your operating system (see [Requirements](#requirements)).
 2. **Inspect the configuration JSON** → Open `vpn-roadwarriors.json`, confirm every value matches your MikroTik CHR, and update anything that changed.
+	![Editing vpn-roadwarriors.json in VS Code with connection and server blocks highlighted](00_Edit_vpn-roadwarriors.json.jpg)
+	*Caption: Connection and server sections updated in VS Code before running the script.*
 3. **Launch the menu** → From `vpn-roadwarriors/`, run `./vpn_roadwarriors.py` (or `python3 vpn_roadwarriors.py`).
-4. **Test the SSH connection (Menu option 1)** → Verifies credentials/host reachability before you touch WireGuard.
-5. **Create or reconcile the server (Menu option 2)** → Builds the WireGuard interface, assigns the address, and syncs local peer cache with the router.
+4. **Test the SSH connection (Menu option 1)** → Verifies credentials/host reachability before you touch WireGuard. The screenshot shows the menu selection, password prompt, and successful `/system identity print` output from the router.
+	![Console output of menu option 1 showing password prompt and router identity response](01_Test_SSH_connection_to_MikroTik_01.jpg)
+	*Caption: Menu option 1 prompting for the router password and printing the RouterOS identity.*
+5. **Create or reconcile the server (Menu option 2)** → Builds the WireGuard interface, assigns the address, and syncs the local peer cache with the router. Follow the on-screen confirmations shown below: generating keys if needed, ensuring firewall rules, and validating the interface status.
+	![Menu option 2 generating server keys and reporting WireGuard interface creation](02_Check_and_create_WireGuard_Server_01.jpg)
+	*Caption: Script generates a WireGuard key pair and creates the `opengwtools-roadwarriors` interface.*
+	![Script confirming the WireGuard interface configuration and address assignment](02_Check_and_create_WireGuard_Server_02.jpg)
+	*Caption: Interface listen port and address are synchronized with the values from the JSON file.*
+	![Final status lines showing firewall rule insertion and peer reconciliation](02_Check_and_create_WireGuard_Server_03.jpg)
+	*Caption: Firewall rules are inserted and remote peers reconciled with the local cache.*
 6. **Validate in Winbox** → Check the interface and firewall rules on the CHR to confirm the automation succeeded.
-7. **Add peers (Menu option 3)** → Collect a name/comment, auto-allocate an IP, push the peer to MikroTik, and create a ready-to-import client configuration.
+7. **Add peers (Menu option 3)** → Collect a name/comment, auto-allocate an IP, push the peer to MikroTik, and create a ready-to-import client configuration. The sequence below illustrates the prompts, generated keys, router updates, and resulting client file path.
+	![Prompt for peer details when selecting menu option 3](03_Add_new_WireGuard_Peer_01.jpg)
+	*Caption: User enters first/last name and optional comment for the new roadwarrior profile.*
+	![Allocation of the next address and generation of WireGuard key pair](03_Add_new_WireGuard_Peer_02.jpg)
+	*Caption: Script selects the next free /32 address and generates the WireGuard key pair locally.*
+	![Router-side commands creating the peer and applying allowed addresses](03_Add_new_WireGuard_Peer_03.jpg)
+	*Caption: RouterOS commands add the peer and configure allowed-address entries through SSH.*
+	![Confirmation of peer creation along with file write message](03_Add_new_WireGuard_Peer_04.jpg)
+	*Caption: Confirmation that the peer was created and the client `.conf` file written to disk.*
+	![Final summary displaying the new peer in the managed list](03_Add_new_WireGuard_Peer_05.jpg)
+	*Caption: Menu refresh showing the newly added peer in the managed list and updated count.*
 8. **List or remove peers (Menu options 5 & 4)** → Review the numbered table, back up configs if needed, and delete entries cleanly from the router, JSON, and filesystem.
 9. **Distribute configs to users** → Follow the platform-specific steps in [Configuring VPN Clients](#configuring-vpn-clients) for Windows, iPhone, or macOS.
 
