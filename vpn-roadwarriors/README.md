@@ -182,6 +182,10 @@ After provisioning a peer, provide the exported `.conf` file to the user (secure
 - **Connectivity smoke test** – After a client connects, ping the WireGuard interface (`10.255.0.1` by default) and any internal subnets listed in `baselineAllowedIps`.
 - **Router-side visibility** – In Winbox or the CLI, check `/interface wireguard peers print detail` to confirm the peer shows the correct `allowed-address` list and has recent handshake times.
 - **Firewall logs** – If traffic stalls, use Winbox **IP → Firewall → Connections** or **Log** with filter rules to spot drops.
+	![Winbox WireGuard peer detail showing endpoint IP, port, traffic counters, and handshake age](03_Add_new_WireGuard_Peer_08.jpg)
+	*Caption: Winbox → Interfaces → WireGuard → double-click the peer to view endpoint IP/port, RX/TX counters, and last-handshake timer.*
+- **Winbox monitoring** – Double-click the peer entry inside **Interfaces → WireGuard → Peers** to see the endpoint IP/port, byte counters, and last handshake (highlighted above). A ticking handshake under a minute and increasing RX/TX confirm that packets are flowing. Stale handshakes point to firewall or connectivity issues; reset by toggling the client tunnel or verifying `AllowedIPs` routes.
+- **Reconciling state** – If a peer never appears in Winbox, rerun menu option 2 then option 5 to re-sync the server and ensure the local cache matches the router.
 
 Security hardening: each peer’s allowed-address list only includes its own /32 endpoint, the WireGuard server (`10.255.0.1/32`), and the networks defined in `baselineAllowedIps`. As a result, roadwarriors cannot reach each other directly; they only see the gateway and the sanctioned internal subnets.
 
@@ -193,6 +197,7 @@ Security hardening: each peer’s allowed-address list only includes its own /32
 - **Key generation errors** – Install Python’s `cryptography` package (`pip install cryptography`) or the WireGuard tools (`apt install wireguard-tools`) so the script can produce keys locally.
 - **Interface already exists** – Option 2 simply reuses the interface, updates listen port/address, and refreshes metadata—safe to run multiple times.
 - **Peer already present on router** – The helper warns about unmanaged peers; add them manually or remove them from the CHR to keep things in sync.
+- **Stuck handshakes** – In Winbox, open **Interfaces → WireGuard → Peers** and confirm the endpoint IP/port, RX/TX counters, and last handshake (see screenshot above). If the timer never resets, verify the client has the correct `AllowedIPs`, the CHR firewall permits UDP from the displayed endpoint, and there is no NAT device rewriting ports unexpectedly.
 
 Keep iterating—this utility is intentionally modular so you can extend it with MDM distribution, MFA enrollment, or monitoring hooks without reworking the core workflow.
 
