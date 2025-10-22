@@ -8,30 +8,30 @@ Manage a MikroTik CHR "roadwarrior" WireGuard deployment from your workstation. 
 
 1. **Review prerequisites** → Install the required tools for your operating system (see [Requirements](#requirements)).
 2. **Inspect the configuration JSON** → Open `vpn-roadwarriors.json`, confirm every value matches your MikroTik CHR, and update anything that changed.
-	![Editing vpn-roadwarriors.json in VS Code with connection and server blocks highlighted](00_Edit_vpn-roadwarriors.json.jpg)
+	![Editing vpn-roadwarriors.json in VS Code with connection and server blocks highlighted](images/00_Edit_vpn-roadwarriors.json.jpg)
 	*Caption: Connection and server sections updated in VS Code before running the script.*
 3. **Launch the menu** → From `vpn-roadwarriors/`, run `./vpn_roadwarriors.py` (or `python3 vpn_roadwarriors.py`).
 4. **Test the SSH connection (Menu option 1)** → Verifies credentials/host reachability before you touch WireGuard. The screenshot shows the menu selection, password prompt, and successful `/system identity print` output from the router.
-	![Console output of menu option 1 showing password prompt and router identity response](01_Test_SSH_connection_to_MikroTik_01.jpg)
+	![Console output of menu option 1 showing password prompt and router identity response](images/01_Test_SSH_connection_to_MikroTik_01.jpg)
 	*Caption: Menu option 1 prompting for the router password and printing the RouterOS identity.*
 5. **Create or reconcile the server (Menu option 2)** → Builds the WireGuard interface, assigns the address, and syncs the local peer cache with the router. Follow the on-screen confirmations shown below: generating keys if needed, ensuring firewall rules, and validating the interface status.
-	![Menu option 2 generating server keys and reporting WireGuard interface creation](02_Check_and_create_WireGuard_Server_01.jpg)
+	![Menu option 2 generating server keys and reporting WireGuard interface creation](images/02_Check_and_create_WireGuard_Server_01.jpg)
 	*Caption: Script generates a WireGuard key pair and creates the `opengwtools-roadwarriors` interface.*
-	![Script confirming the WireGuard interface configuration and address assignment](02_Check_and_create_WireGuard_Server_02.jpg)
+	![Script confirming the WireGuard interface configuration and address assignment](images/02_Check_and_create_WireGuard_Server_02.jpg)
 	*Caption: Interface listen port and address are synchronized with the values from the JSON file.*
-	![Final status lines showing firewall rule insertion and peer reconciliation](02_Check_and_create_WireGuard_Server_03.jpg)
+	![Final status lines showing firewall rule insertion and peer reconciliation](images/02_Check_and_create_WireGuard_Server_03.jpg)
 	*Caption: Firewall rules are inserted and remote peers reconciled with the local cache.*
 6. **Validate in Winbox** → Check the interface and firewall rules on the CHR to confirm the automation succeeded.
 7. **Add peers (Menu option 3)** → Collect a name/comment, auto-allocate an IP, push the peer to MikroTik, and create a ready-to-import client configuration. The sequence below illustrates the prompts, generated keys, router updates, and resulting client file path.
-	![Prompt for peer details when selecting menu option 3](03_Add_new_WireGuard_Peer_01.jpg)
+	![Prompt for peer details when selecting menu option 3](images/03_Add_new_WireGuard_Peer_01.jpg)
 	*Caption: User enters first/last name and optional comment for the new roadwarrior profile.*
-	![Allocation of the next address and generation of WireGuard key pair](03_Add_new_WireGuard_Peer_02.jpg)
+	![Allocation of the next address and generation of WireGuard key pair](images/03_Add_new_WireGuard_Peer_02.jpg)
 	*Caption: Script selects the next free /32 address and generates the WireGuard key pair locally.*
-	![Router-side commands creating the peer and applying allowed addresses](03_Add_new_WireGuard_Peer_03.jpg)
+	![Router-side commands creating the peer and applying allowed addresses](images/03_Add_new_WireGuard_Peer_03.jpg)
 	*Caption: RouterOS commands add the peer and configure allowed-address entries through SSH.*
-	![Confirmation of peer creation along with file write message](03_Add_new_WireGuard_Peer_04.jpg)
+	![Confirmation of peer creation along with file write message](images/03_Add_new_WireGuard_Peer_04.jpg)
 	*Caption: Confirmation that the peer was created and the client `.conf` file written to disk.*
-	![Final summary displaying the new peer in the managed list](03_Add_new_WireGuard_Peer_05.jpg)
+	![Final summary displaying the new peer in the managed list](images/03_Add_new_WireGuard_Peer_05.jpg)
 	*Caption: Menu refresh showing the newly added peer in the managed list and updated count.*
 8. **List or remove peers (Menu options 5 & 4)** → Review the numbered table, back up configs if needed, and delete entries cleanly from the router, JSON, and filesystem.
 9. **Distribute configs to users** → Follow the platform-specific steps in [Configuring VPN Clients](#configuring-vpn-clients) for Windows, iPhone, or macOS.
@@ -168,9 +168,9 @@ After provisioning a peer, provide the exported `.conf` file to the user (secure
 2. Launch WireGuard and click **Import tunnel(s) from file…**.
 3. Pick the `.conf` file, review the summary, and click **Save**.
 4. Enable the tunnel from the menu bar icon when ready to connect.
-	![WireGuard for macOS import dialog showing tunnel configuration summary](03_Add_new_WireGuard_Peer_06.jpg)
+	![WireGuard for macOS import dialog showing tunnel configuration summary](images/03_Add_new_WireGuard_Peer_06.jpg)
 	*Caption: WireGuard for macOS ready to import the generated `.conf` from the `clients/` folder.*
-	![WireGuard for macOS with imported tunnel listed and ready to activate](03_Add_new_WireGuard_Peer_07.jpg)
+	![WireGuard for macOS with imported tunnel listed and ready to activate](images/03_Add_new_WireGuard_Peer_07.jpg)
 	*Caption: Imported roadwarrior tunnel visible in the macOS client, ready for activation.*
 
 > The macOS client works seamlessly with configs produced by this tool—copy the desired `.conf` from `vpn-roadwarriors/clients/` to your Mac and import it through the dialog above.
@@ -182,7 +182,7 @@ After provisioning a peer, provide the exported `.conf` file to the user (secure
 - **Connectivity smoke test** – After a client connects, ping the WireGuard interface (`10.255.0.1` by default) and any internal subnets listed in `baselineAllowedIps`.
 - **Router-side visibility** – In Winbox or the CLI, check `/interface wireguard peers print detail` to confirm the peer shows the correct `allowed-address` list and has recent handshake times.
 - **Firewall logs** – If traffic stalls, use Winbox **IP → Firewall → Connections** or **Log** with filter rules to spot drops.
-	![Winbox WireGuard peer detail showing endpoint IP, port, traffic counters, and handshake age](03_Add_new_WireGuard_Peer_08.jpg)
+	![Winbox WireGuard peer detail showing endpoint IP, port, traffic counters, and handshake age](images/03_Add_new_WireGuard_Peer_08.jpg)
 	*Caption: Winbox → Interfaces → WireGuard → double-click the peer to view endpoint IP/port, RX/TX counters, and last-handshake timer.*
 - **Winbox monitoring** – Double-click the peer entry inside **Interfaces → WireGuard → Peers** to see the endpoint IP/port, byte counters, and last handshake (highlighted above). A ticking handshake under a minute and increasing RX/TX confirm that packets are flowing. Stale handshakes point to firewall or connectivity issues; reset by toggling the client tunnel or verifying `AllowedIPs` routes.
 - **Reconciling state** – If a peer never appears in Winbox, rerun menu option 2 then option 5 to re-sync the server and ensure the local cache matches the router.
