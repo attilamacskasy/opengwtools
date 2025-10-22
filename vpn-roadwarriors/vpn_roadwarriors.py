@@ -749,6 +749,24 @@ def add_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
     else:
         print(f"[vpn-roadwarriors] Router accepted peer {peer_name}.")
 
+    connection = config["connection"]
+    router_endpoint = connection.get("routerPublicIp") or connection.get("routerIp")
+    listen_port = server["listenPort"]
+    dns = server.get("dns", DEFAULT_DNS)
+
+    client_allowed_ips: List[str] = []
+    try:
+        server_interface_ip = ipaddress.ip_interface(server.get("address", DEFAULT_SERVER_ADDRESS)).ip
+        server_ip_cidr = f"{server_interface_ip}/32"
+        client_allowed_ips.append(server_ip_cidr)
+    except ValueError:
+        server_ip_cidr = ""
+    if allowed_address not in client_allowed_ips:
+        client_allowed_ips.append(allowed_address)
+    for item in allowed_ips:
+        if item not in client_allowed_ips:
+            client_allowed_ips.append(item)
+
     peer_record = {
         "id": peer_name,
         "firstName": first_name,
@@ -759,20 +777,10 @@ def add_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
         "allowedAddress": allowed_address,
         "configFile": "",
         "presharedKey": "",
-        "allowedIps": allowed_ips,
+        "allowedIps": client_allowed_ips,
         "routerAllowed": router_allowed,
         "createdAt": datetime.datetime.utcnow().isoformat() + "Z",
     }
-
-    connection = config["connection"]
-    router_endpoint = connection.get("routerPublicIp") or connection.get("routerIp")
-    listen_port = server["listenPort"]
-    dns = server.get("dns", DEFAULT_DNS)
-
-    client_allowed_ips = [allowed_address]
-    for item in allowed_ips:
-        if item not in client_allowed_ips:
-            client_allowed_ips.append(item)
 
     config_text = render_client_config(
         client_private=client_private,
@@ -796,7 +804,7 @@ def add_wireguard_peer(config: Dict[str, Any], client: SSHClient) -> None:
     print(f"  Allowed IP    : {allowed_address}")
     print(f"  Private key   : {client_private}")
     print(f"  Public key    : {client_public}")
-    print(f"  AllowedIPs    : {', '.join(allowed_ips)}")
+    print(f"  AllowedIPs    : {', '.join(client_allowed_ips)}")
     print(f"  Router allow  : {', '.join(router_allowed)}")
     print(f"  Config file   : {file_path}")
 
