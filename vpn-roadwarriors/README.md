@@ -168,6 +168,12 @@ After provisioning a peer, provide the exported `.conf` file to the user (secure
 2. Launch WireGuard and click **Import tunnel(s) from file…**.
 3. Pick the `.conf` file, review the summary, and click **Save**.
 4. Enable the tunnel from the menu bar icon when ready to connect.
+	![WireGuard for macOS import dialog showing tunnel configuration summary](03_Add_new_WireGuard_Peer_06.jpg)
+	*Caption: WireGuard for macOS ready to import the generated `.conf` from the `clients/` folder.*
+	![WireGuard for macOS with imported tunnel listed and ready to activate](03_Add_new_WireGuard_Peer_07.jpg)
+	*Caption: Imported roadwarrior tunnel visible in the macOS client, ready for activation.*
+
+> The macOS client works seamlessly with configs produced by this tool—copy the desired `.conf` from `vpn-roadwarriors/clients/` to your Mac and import it through the dialog above.
 
 ---
 
@@ -176,6 +182,8 @@ After provisioning a peer, provide the exported `.conf` file to the user (secure
 - **Connectivity smoke test** – After a client connects, ping the WireGuard interface (`10.255.0.1` by default) and any internal subnets listed in `baselineAllowedIps`.
 - **Router-side visibility** – In Winbox or the CLI, check `/interface wireguard peers print detail` to confirm the peer shows the correct `allowed-address` list and has recent handshake times.
 - **Firewall logs** – If traffic stalls, use Winbox **IP → Firewall → Connections** or **Log** with filter rules to spot drops.
+
+Security hardening: each peer’s allowed-address list only includes its own /32 endpoint, the WireGuard server (`10.255.0.1/32`), and the networks defined in `baselineAllowedIps`. As a result, roadwarriors cannot reach each other directly; they only see the gateway and the sanctioned internal subnets.
 
 ---
 
